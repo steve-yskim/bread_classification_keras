@@ -34,9 +34,10 @@ def multiple_hue(img):
     return temp_image
     
 class Import_data:
-    def __init__(self, train_path):
+    def __init__(self, train_path, val_path, batch_size):
         self.train_path = train_path
         self.test_path = val_path
+        self.batch_size =batch_size
     def train(self):
         # generator 생성
         train_datagen = ImageDataGenerator(rescale = 1/255.,
@@ -54,7 +55,7 @@ class Import_data:
         train_generator = train_datagen.flow_from_directory(
             self.train_path,
             target_size=(224, 224),
-            batch_size=32,
+            batch_size=self.batch_size,
             interpolation='bilinear',
             color_mode ='rgb',
             class_mode='binary',
@@ -94,20 +95,23 @@ class Load_model:
         return model
 
 class Fine_tunning:
-    def __init__(self, train_path, model_name, epoch):
-        self.data = Import_data(train_path)
+    def __init__(self, train_path, val_path, model_name, epoch, batch_size, learning_rate):
+        self.batch_size = batch_size
+        self.learning_rate = learning_rate
+        self.data = Import_data(train_path, val_path, self.batch_size)
         self.train_data, self.val_data = self.data.train()
         self.load_model = Load_model(train_path)
         self.epoch = epoch
         self.model_name = model_name
         self.train_path = train_path
 
+
     def training(self):
         data_name = self.train_path.split('/')
         data_name = data_name[len(data_name)-3]
 
         # 옵티마이저 정의
-        optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001)
+        optimizer = tf.keras.optimizers.Adam(learning_rate=self.learning_rate)
         es = tf.keras.callbacks.EarlyStopping( monitor="val_acc", mode="max", patience = 10)
         reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=(1/np.sqrt(10)), patience=5, min_lr = 1e-6 )
 
@@ -186,18 +190,18 @@ class Fine_tunning:
             os.remove(path)
         K.clear_session()
 
-
-# from ops import *
-train_path = 'Bread-DATASET/train/' # 경로 마지막에 반드시 '/'를 기입해야하며합니다.
-#dataset 이후 Skin 혹은 Eye로 데이터셋 변경이 가능하며, 그 이후 디렉토리 구조는 동일합니다.
-val_path = 'Bread-DATASET/test/'
-model_name = 'Xception'
-epoch = 1
-
 if __name__ == '__main__':
+    # from ops import *
+    train_path = 'Bread-DATASET/train/' # 경로 마지막에 반드시 '/'를 기입해야하며합니다.
+    #dataset 이후 Skin 혹은 Eye로 데이터셋 변경이 가능하며, 그 이후 디렉토리 구조는 동일합니다.
+    val_path = 'Bread-DATASET/test/'
+    model_name = 'Xception' # https://keras.io/api/applications/ 에 있는 모델이름
+    epoch = 1
+    batch_size = 32
+    learning_rate = 0.0001
     with tf.device('/cpu:0'):
-        fine_tunning = Fine_tunning(train_path=train_path,
-                                    model_name=model_name,
-                                    epoch=epoch)
+        fine_tunning = Fine_tunning(train_path = train_path, val_path = val_path,
+                                    model_name = model_name,
+                                    epoch = epoch, batch_size = batch_size, learning_rate = learning_rate)
         history = fine_tunning.training()
         fine_tunning.save_accuracy(history)
